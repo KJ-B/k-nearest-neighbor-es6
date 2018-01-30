@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Machine Learning in JS: K Nearest Neighbour Sim</title>
+    <style>
+        #canvas {
+            width:400px;
+            height:400px;
+            border:1px solid black;
+            display:block;
+            margin:20px auto;
+        }
+    </style>
+</head>
+<body>
+<canvas id="canvas" width=400 height=400></canvas>
+
+<script>
+	/*
+    * Machine Learning in JS: K-Nearest Neighbour
+    * see https://en.wikipedia.org/wiki/K-nearest_neighbors_algorithm
+    * ES6 example
+    * Expected keys in object:
+    * rooms, area, type
+    *
+    * */
+	data = [
+		{rooms: 1, area: 350, type: 'apartment'},
+		{rooms: 2, area: 300, type: 'apartment'},
+		{rooms: 3, area: 300, type: 'apartment'},
+		{rooms: 4, area: 250, type: 'apartment'},
+		{rooms: 4, area: 500, type: 'apartment'},
+		{rooms: 4, area: 400, type: 'apartment'},
+		{rooms: 5, area: 450, type: 'apartment'},
+
+		{rooms: 7,  area: 850,  type: 'house'},
+		{rooms: 7,  area: 900,  type: 'house'},
+		{rooms: 7,  area: 1200, type: 'house'},
+		{rooms: 8,  area: 1500, type: 'house'},
+		{rooms: 9,  area: 1300, type: 'house'},
+		{rooms: 8,  area: 1240, type: 'house'},
+		{rooms: 10, area: 1700, type: 'house'},
+		{rooms: 9,  area: 1000, type: 'house'},
+
+		{rooms: 1, area: 800,  type: 'condo'},
+		{rooms: 3, area: 900,  type: 'condo'},
+		{rooms: 2, area: 700,  type: 'condo'},
+		{rooms: 1, area: 900,  type: 'condo'},
+		{rooms: 2, area: 1150, type: 'condo'},
+		{rooms: 1, area: 1000, type: 'condo'},
+		{rooms: 2, area: 1200, type: 'condo'},
+		{rooms: 1, area: 1300, type: 'condo'},
+	];
+
+	class ResidenceDataPoint {
+
+		constructor(object){
+			this.neighbors = [];
+			this.guess = null;
+			this.datapoints = [];
+
+			for (let key in object)
+			{
+				this[key] = object[key];
+			}
+		}
+
+		measureDistances (area_range_obj, rooms_range_obj) {
+			/* measureDistances takes the ResidenceDataPoints's set of ranges for min and max rooms and areas.
+             * If you've abstracted away from hard-coding features, the argument to this method would just be an array
+             * of ranges for features, but here we've hardcoded it.
+             * */
+
+			// calculate the rooms and area range
+			let rooms_range = rooms_range_obj.max - rooms_range_obj.min;
+			let area_range  = area_range_obj.max  - area_range_obj.min;
+
+			/* we loop through our ResidenceDataPoint's neighbors (we gave this ResidenceDataPoint the neighbors property above when we cloned
+            the data points  from ResidenceDataPoints). For each one of the neighbors we calculate the difference in number of
+            rooms and area. After each of those calculations, we normalize by dividing each feature by its range */
+
+			for (let i in this.neighbors)
+			{
+				/* Just shortcut syntax */
+				let neighbor = this.neighbors[i];
+
+				let delta_rooms = neighbor.rooms - this.rooms;
+				delta_rooms = (delta_rooms ) / rooms_range;
+
+				let delta_area  = neighbor.area  - this.area;
+				delta_area = (delta_area ) / area_range;
+
+				// Use the pythagorean theorem to calculate distance
+				/* If you have more than 2 features (dimensions), you still keep the Math.sqrt --
+                * you just add all the squared features like so
+                * Math.sqrt( a*a + b*b + c*c + d*d + ... + z*z );
+                * */
+				neighbor.distance = Math.sqrt( delta_rooms*delta_rooms + delta_area*delta_area );
+			}
+		}
+
+		sortByDistance () {
+			this.neighbors.sort(function (a, b) {
+				return a.distance - b.distance;
+			});
+		}
+
+		guessType (k) {
+			let types = {};
+			for (let i in this.neighbors.slice(0, k))
+			{
+				let neighbor = this.neighbors[i];
+
+				if ( ! types[neighbor.type] ) {
+					types[neighbor.type] = 0;
+				}
+
+				types[neighbor.type] += 1;
+			}
+			let guess = {type: false, count: 0};
+			for (let type in types)
+			{
+				if (types[type] > guess.count)
+				{
+					guess.type = type;
+					guess.count = types[type];
+				}
+			}
+			this.guess = guess;
+			return types;
+		}
+
+	}
+
+	class ResidenceDataPoints {
+
+		constructor (k) {
+			this.datapoints = [];
+			this.k = k;
+			this.areas = {};
+			this.rooms = {};
+		}
+
+		determineUnknown() {
+			// calculate the min and max ranges so that the ResidenceDataPoints is aware of it
+			this.calculateRanges();
+
+			/*
+             * Loop through our nodes and look for unknown types / points.
+             */
+			for (let i in this.datapoints)
+			{
+				if ( ! this.datapoints[i].type)
+				{
+					/*
+                     * If point is an unknown type, clone the data points list and then measure distances.
+                     */
+
+					/* Clone nodes into a neighbors property array */
+					this.datapoints[i].neighbors = [];
+					// loop through the nodes again (could be better, but for simplicity)
+					for (let j in this.datapoints)
+					{
+						// if the type is not known, we won't add it to neighbors
+						if ( ! this.datapoints[j].type)
+							continue;
+						this.datapoints[i].neighbors.push( new ResidenceDataPoint(this.datapoints[j]) );
+					}
+
+					/* Measure distances */
+					this.datapoints[i].measureDistances(this.areas, this.rooms);
+
+					/* Sort by distance */
+					this.datapoints[i].sortByDistance();
+
+					/* Guess type */
+					let result = this.datapoints[i].guessType(this.k);
+					// console.log('num of props: ' + Object.keys(result).length);
+					console.log('the residence is likely a : \n');
+					console.log(result);
+
+				}
+			}
+		}
+
+		calculateRanges() {
+			/* normalization of data method
+			TODO: abstract the features (areas, rooms)
+			*/
+
+			this.areas = {min: 1000000, max: 0};
+			this.rooms = {min: 1000000, max: 0};
+			for (let i in this.datapoints)
+			{
+				if (this.datapoints[i].rooms < this.rooms.min)
+				{
+					this.rooms.min = this.datapoints[i].rooms;
+				}
+
+				if (this.datapoints[i].rooms > this.rooms.max)
+				{
+					this.rooms.max = this.datapoints[i].rooms;
+				}
+
+				if (this.datapoints[i].area < this.areas.min)
+				{
+					this.areas.min = this.datapoints[i].area;
+				}
+
+				if (this.datapoints[i].area > this.areas.max)
+				{
+					this.areas.max = this.datapoints[i].area;
+				}
+			}
+
+		}
+
+		draw (canvas_id){
+			let rooms_range = this.rooms.max - this.rooms.min;
+			let areas_range = this.areas.max - this.areas.min;
+
+			let canvas = document.getElementById(canvas_id);
+			let ctx = canvas.getContext("2d");
+			let width = 400;
+			let height = 400;
+			ctx.clearRect(0,0,width, height);
+
+			for (var i in this.datapoints)
+			{
+				ctx.save();
+
+				switch (this.datapoints[i].type)
+				{
+					case 'apartment':
+						ctx.fillStyle = 'red';
+						break;
+					case 'house':
+						ctx.fillStyle = 'green';
+						break;
+					case 'flat':
+						ctx.fillStyle = 'blue';
+						break;
+					default:
+						ctx.fillStyle = '#666666';
+				}
+
+				let padding = 40;
+				let x_shift_pct = (width  - padding) / width;
+				let y_shift_pct = (height - padding) / height;
+
+				let x = (this.datapoints[i].rooms - this.rooms.min) * (width  / rooms_range) * x_shift_pct + (padding / 2);
+				let y = (this.datapoints[i].area  - this.areas.min) * (height / areas_range) * y_shift_pct + (padding / 2);
+				y = Math.abs(y - height);
+
+
+				ctx.translate(x, y);
+				ctx.beginPath();
+				ctx.arc(0, 0, 5, 0, Math.PI*2, true);
+				ctx.fill();
+				ctx.closePath();
+
+
+				/*
+                 * Is this an unknown node? If so, draw the radius of influence
+                 */
+
+				if ( ! this.datapoints[i].type )
+				{
+					switch (this.datapoints[i].guess.type)
+					{
+						case 'apartment':
+							ctx.strokeStyle = 'red';
+							break;
+						case 'house':
+							ctx.strokeStyle = 'green';
+							break;
+						case 'flat':
+							ctx.strokeStyle = 'blue';
+							break;
+						default:
+							ctx.strokeStyle = '#666666';
+					}
+
+					let radius = this.datapoints[i].neighbors[this.k - 1].distance * width;
+					radius *= x_shift_pct;
+					ctx.beginPath();
+					ctx.arc(0, 0, radius, 0, Math.PI*2, true);
+					ctx.stroke();
+					ctx.closePath();
+
+				}
+
+				ctx.restore();
+
+			}
+		}
+
+		add (node) {
+			this.datapoints.push(node);
+		};
+	}
+
+    class App {
+		constructor(data){
+		    this.datapoints = [];
+		    this.data = data;
+		    this.init();
+		}
+
+		init(){
+			this.datapoints = new ResidenceDataPoints(3);
+			for (let i in this.data) {
+				this.datapoints.add( new ResidenceDataPoint(this.data[i]));
+            }
+			let random_rooms = Math.round( Math.random() * 10 );
+			let random_area = Math.round( Math.random() * 2000 );
+			console.log('rooms: ' + random_rooms + ' area: ' + random_area);
+			this.datapoints.add(new ResidenceDataPoint({rooms: random_rooms, area: random_area, type: false}) );
+            this.datapoints.determineUnknown();
+            this.datapoints.draw('canvas');
+		}
+    }
+
+    let app = new App(data);
+	setInterval(app.init,5000);
+	app.init();
+
+</script>
+</body>
+</html>
