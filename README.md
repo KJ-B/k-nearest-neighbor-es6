@@ -22,3 +22,5 @@ Open up the Dev tools, and observe the output in the console while
 the data point of unknown type is displayed on the screen. The circular
 edge represents the distance required to measure against its three
 closest neighbours.
+
+![Screen Shot 2018-01-30 at 12.04.58 AM](./images/knn_screenshot_001.png)
